@@ -16,7 +16,7 @@ local Size            = require("ui/size")
 local UIManager       = require("ui/uimanager")
 local VerticalGroup   = require("ui/widget/verticalgroup")
 local VerticalSpan    = require("ui/widget/verticalspan")
-local _               = require("gettext")
+local _               = require("i18n")
 local T               = require("ffi/util").template
 
 local ScreenBase         = require("screen_base")
@@ -246,13 +246,23 @@ function ShikakuScreen:onCheck()
 end
 
 function ShikakuScreen:showRulesHint()
-    self:showMessage(_(
-        "Divide the grid into rectangles.\n" ..
-        "Each rectangle contains exactly one number equal to its area.\n\n" ..
-        "Tap first corner, then second corner to place a rectangle.\n" ..
-        "Hold a cell to remove its rectangle.\n" ..
-        "Tap the same corner twice to cancel."
-    ), 8)
+    if _.lang() == "fr" then
+        self:showMessage(
+            "Divisez la grille en rectangles.\n" ..
+            "Chaque rectangle contient exactement un chiffre égal à son aire.\n\n" ..
+            "Appuyez sur le premier coin, puis le deuxième pour placer un rectangle.\n" ..
+            "Maintenez enfoncé pour supprimer un rectangle.\n" ..
+            "Appuyez deux fois sur le même coin pour annuler."
+        , 8)
+    else
+        self:showMessage(_(
+            "Divide the grid into rectangles.\n" ..
+            "Each rectangle contains exactly one number equal to its area.\n\n" ..
+            "Tap first corner, then second corner to place a rectangle.\n" ..
+            "Hold a cell to remove its rectangle.\n" ..
+            "Tap the same corner twice to cancel."
+        ), 8)
+    end
 end
 
 -- ---------------------------------------------------------------------------
