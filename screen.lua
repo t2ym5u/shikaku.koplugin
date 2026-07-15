@@ -42,7 +42,7 @@ Rules:
 • The area of that rectangle (width × height) equals the number it contains.
 • Every cell of the grid must belong to exactly one rectangle.
 
-Tap a cell to start drawing a rectangle, then tap another cell to set the opposite corner.
+Tap a cell to start drawing a rectangle, then tap another cell to set the opposite corner. Tap the same corner twice to cancel. Hold a cell to remove its rectangle.
 ]])
 
 local GAME_RULES_FR = [[
@@ -55,7 +55,7 @@ Règles :
 • L'aire de ce rectangle (largeur × hauteur) est égale au nombre qu'il contient.
 • Chaque case de la grille doit appartenir à exactement un rectangle.
 
-Appuyez sur une case pour commencer à dessiner un rectangle, puis appuyez sur une autre case pour définir le coin opposé.
+Appuyez sur une case pour commencer à dessiner un rectangle, puis appuyez sur une autre case pour définir le coin opposé. Appuyez deux fois sur le même coin pour annuler. Maintenez une case enfoncée pour supprimer son rectangle.
 ]]
 
 local ShikakuScreen = ScreenBase:extend{}
@@ -101,21 +101,14 @@ function ShikakuScreen:buildLayout()
         and math.max(right_panel_width - Size.span.horizontal_default, 100)
         or  math.floor(sw * 0.9)
 
-    local top_buttons = ButtonTable:new{
-        shrink_unneeded_width = true,
-        width   = button_width,
-        buttons = {{
-            { text = _("New game"),  callback = function() self:onNewGame() end },
-            { id = "grid_button",    text = self:getGridButtonText(),
-              callback = function() self:openGridMenu() end },
-            { id = "diff_button",    text = self:getDiffButtonText(),
-              callback = function() self:openDifficultyMenu() end },
+    local title_bar = self:buildTitleBar(_("Shikaku"), function()
+        return {
+            { text = _("New game"),            callback = function() self:onNewGame() end },
+            { text = self:getGridButtonText(), callback = function() self:openGridMenu() end },
+            { text = self:getDiffButtonText(), callback = function() self:openDifficultyMenu() end },
             self:makeRulesButtonConfig(GAME_RULES_EN, GAME_RULES_FR),
-            self:makeCloseButtonConfig(),
-        }},
-    }
-    self.grid_button = top_buttons:getButtonById("grid_button")
-    self.diff_button = top_buttons:getButtonById("diff_button")
+        }
+    end)
 
     local bottom_buttons = ButtonTable:new{
         shrink_unneeded_width = true,
@@ -125,7 +118,6 @@ function ShikakuScreen:buildLayout()
             { text = _("Clear All"), callback = function() self:onClearAll() end },
             { id = "undo_button", text = _("Undo"),
               callback = function() self:onUndo() end },
-            { text = _("Rules"),     callback = function() self:showRulesHint() end },
         }},
     }
     self.undo_button = bottom_buttons:getButtonById("undo_button")
@@ -134,33 +126,26 @@ function ShikakuScreen:buildLayout()
     if is_landscape then
         local right_panel = VerticalGroup:new{
             align = "center",
-            top_buttons,
-            VerticalSpan:new{ width = Size.span.vertical_large },
             self.status_text,
             VerticalSpan:new{ width = Size.span.vertical_large },
             bottom_buttons,
         }
-        self.layout = HorizontalGroup:new{
+        local content = HorizontalGroup:new{
             align = "center",
             board_frame,
             HorizontalSpan:new{ width = Size.span.horizontal_default },
             right_panel,
         }
+        self:buildLandscapeLayout(title_bar, content)
     else
-        self.layout = VerticalGroup:new{
+        local content = VerticalGroup:new{
             align = "center",
-            VerticalSpan:new{ width = Size.span.vertical_large },
-            top_buttons,
-            VerticalSpan:new{ width = Size.span.vertical_large },
             board_frame,
             VerticalSpan:new{ width = Size.span.vertical_large },
             self.status_text,
-            VerticalSpan:new{ width = Size.span.vertical_large },
-            bottom_buttons,
-            VerticalSpan:new{ width = Size.span.vertical_large },
         }
+        self:buildPortraitLayout(title_bar, content, bottom_buttons)
     end
-    self[1] = self.layout
     self:updateStatus()
 end
 
@@ -243,26 +228,6 @@ function ShikakuScreen:onCheck()
         self:updateStatus(T(_("Rectangles placed: %1/%2 — keep going!"), placed, total))
     end
     self.board_widget:refresh()
-end
-
-function ShikakuScreen:showRulesHint()
-    if _.lang() == "fr" then
-        self:showMessage(
-            "Divisez la grille en rectangles.\n" ..
-            "Chaque rectangle contient exactement un chiffre égal à son aire.\n\n" ..
-            "Appuyez sur le premier coin, puis le deuxième pour placer un rectangle.\n" ..
-            "Maintenez enfoncé pour supprimer un rectangle.\n" ..
-            "Appuyez deux fois sur le même coin pour annuler."
-        , 8)
-    else
-        self:showMessage(_(
-            "Divide the grid into rectangles.\n" ..
-            "Each rectangle contains exactly one number equal to its area.\n\n" ..
-            "Tap first corner, then second corner to place a rectangle.\n" ..
-            "Hold a cell to remove its rectangle.\n" ..
-            "Tap the same corner twice to cancel."
-        ), 8)
-    end
 end
 
 -- ---------------------------------------------------------------------------
