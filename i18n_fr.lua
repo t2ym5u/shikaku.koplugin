@@ -8,4 +8,7 @@ return {
     [" \xC2\xB7 Tap second corner"]               = { fr = " · Appuyez sur le second coin" },
     [" \xC2\xB7 Tap two corners to place"]        = { fr = " · Appuyez sur deux coins pour placer" },
     ["%1\xC3\x97%2 \xC2\xB7 %3 \xC2\xB7 Rects: %4/%5%6"] = { fr = "%1×%2 · %3 · Rectangles : %4/%5%6" },
+    ["Clear All"]   = { fr = "Tout effacer" },
+    ["Divide the grid into rectangles"] = { fr = "Divisez la grille en rectangles" },
+    ["Shikaku"]     = { fr = "Shikaku" },
 }
