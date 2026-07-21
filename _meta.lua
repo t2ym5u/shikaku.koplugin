@@ -3,5 +3,5 @@ return {
     name        = "shikaku",
     fullname    = _("Shikaku"),
     description = _("Divide the grid into rectangles"),
-    version     = "1.1.4",
+    version     = "1.1.5",
 }
