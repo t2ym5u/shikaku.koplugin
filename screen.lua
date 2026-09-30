@@ -60,6 +60,24 @@ Appuyez sur une case pour commencer à dessiner un rectangle, puis appuyez sur u
 
 local ShikakuScreen = ScreenBase:extend{}
 
+-- The unit here is a rectangle: revealing one cell of one would say almost
+-- nothing, since the puzzle is about where the borders fall.
+function ShikakuScreen:describeHintStep(step, level)
+    local rect = step.rect
+    local h = rect and (rect.r2 - rect.r1 + 1) or 0
+    local w = rect and (rect.c2 - rect.c1 + 1) or 0
+    if level == 1 then
+        return step.kind == "mistake"
+            and T(_("The rectangle at R%1C%2 is wrong. Tap Hint again to clear it."),
+                  step.r, step.c)
+            or  T(_("A %1x%2 rectangle starts at R%3C%4. Tap Hint again to draw it."),
+                  h, w, step.r, step.c)
+    end
+    return step.kind == "mistake"
+        and T(_("Cleared the rectangle at R%1C%2."), step.r, step.c)
+        or  T(_("Drew the %1x%2 rectangle at R%3C%4."), h, w, step.r, step.c)
+end
+
 function ShikakuScreen:init()
     local state = self.plugin:loadState()
     local n     = self.plugin:getSetting("grid_n", 6)
@@ -117,6 +135,7 @@ function ShikakuScreen:buildLayout()
         width   = button_width,
         buttons = {{
             { text = _("Check"),     callback = function() self:onCheck() end },
+            { text = _("Hint"), callback = function() self:onHint() end },
             { text = _("Clear All"), callback = function() self:onClearAll() end },
             { id = "undo_button", text = _("Undo"),
               callback = function() self:onUndo() end },

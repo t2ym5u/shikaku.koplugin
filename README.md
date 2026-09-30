@@ -13,6 +13,7 @@ Divide the grid into rectangles. Each rectangle contains exactly one number equa
 ## Features
 
 - **Multiple grid sizes**
+- **Hint** — two taps, working in a rectangle rather than cells: the first points at it, the second acts on it
 - **Three difficulty levels** — Easy, Medium, Hard
 - **Rectangle preview** — see the rectangle as you draw it
 - **Check** — highlights overlapping or incorrectly sized rectangles
