@@ -11,4 +11,10 @@ return {
     ["Clear All"]   = { fr = "Tout effacer", es = "Borrar todo", de = "Alles löschen" },
     ["Divide the grid into rectangles"] = { fr = "Divisez la grille en rectangles", es = "Divide la cuadrícula en rectángulos", de = "Teile das Raster in Rechtecke" },
     ["Shikaku"]     = { fr = "Shikaku", es = "Shikaku", de = "Shikaku" },
+
+    -- Hints (board.lua :findHint) -- the unit is a rectangle, not a cell.
+    ["A %1x%2 rectangle starts at R%3C%4. Tap Hint again to draw it."] = { fr = "Un rectangle %1x%2 commence en L%3C%4. Touchez à nouveau Astuce pour le tracer.", es = "Un rectángulo %1x%2 empieza en F%3C%4. Toque Pista otra vez para trazarlo.", de = "Ein %1x%2-Rechteck beginnt bei Z%3S%4. Tippen Sie erneut auf Tipp, um es zu zeichnen." },
+    ["The rectangle at R%1C%2 is wrong. Tap Hint again to clear it."] = { fr = "Le rectangle en L%1C%2 est incorrect. Touchez à nouveau Astuce pour l'effacer.", es = "El rectángulo en F%1C%2 es incorrecto. Toque Pista otra vez para borrarlo.", de = "Das Rechteck bei Z%1S%2 ist falsch. Tippen Sie erneut auf Tipp, um es zu entfernen." },
+    ["Drew the %1x%2 rectangle at R%3C%4."] = { fr = "Rectangle %1x%2 tracé en L%3C%4.", es = "Rectángulo %1x%2 trazado en F%3C%4.", de = "%1x%2-Rechteck bei Z%3S%4 gezeichnet." },
+    ["Cleared the rectangle at R%1C%2."] = { fr = "Rectangle effacé en L%1C%2.", es = "Rectángulo borrado en F%1C%2.", de = "Rechteck bei Z%1S%2 entfernt." },
 }

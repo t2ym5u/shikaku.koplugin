@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-09-30
+
+### Added
+- **Hint** button. Two taps: the first says where a rectangle starts and what size it is, the second draws it. Revealing a single cell would say almost nothing here, since the puzzle is about where the borders fall. A move that contradicts the solution is always
+  reported before a fresh one is revealed.
+
+
 ## [1.1.8] - 2026-07-29
 
 ### Fixed
