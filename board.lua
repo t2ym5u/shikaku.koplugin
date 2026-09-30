@@ -450,6 +450,72 @@ end
 -- Persistence
 -- ---------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- Hints
+--
+-- The unit here is a rectangle, not a cell: revealing a single cell of one
+-- would say almost nothing, since the puzzle is about where the borders fall.
+-- So a hint offers a whole rectangle, and each step carries its own wording.
+--
+-- A rectangle the player has drawn that matches none of the solution's is
+-- reported before a fresh one is revealed, and clearing it means clearing its
+-- cells rather than solving it for them.
+local function rectKey(rect)
+    return rect.r1 .. "," .. rect.c1 .. "," .. rect.r2 .. "," .. rect.c2
+end
+
+function ShikakuBoard:findHint()
+    local solution = {}
+    for _, rect in ipairs(self.rects or {}) do solution[rectKey(rect)] = true end
+
+    -- A player rectangle that is not in the solution at all.
+    for _, rect in ipairs(self.player_rects or {}) do
+        if not solution[rectKey(rect)] then
+            return {
+                kind = "mistake", r = rect.r1, c = rect.c1, rect = rect,
+            }
+        end
+    end
+
+    -- The first solution rectangle the player has not drawn.
+    local placed = {}
+    for _, rect in ipairs(self.player_rects or {}) do placed[rectKey(rect)] = true end
+    for _, rect in ipairs(self.rects or {}) do
+        if not placed[rectKey(rect)] then
+            local w = rect.c2 - rect.c1 + 1
+            local h = rect.r2 - rect.r1 + 1
+            return {
+                kind = "fill", r = rect.r1, c = rect.c1, rect = rect,
+            }
+        end
+    end
+    return nil, "complete"
+end
+
+function ShikakuBoard:applyHint(step)
+    if not step or not step.rect then return false end
+    local rect = step.rect
+    if step.kind == "mistake" then
+        for r = rect.r1, rect.r2 do
+            for c = rect.c1, rect.c2 do self:clearCell(r, c) end
+        end
+        return true
+    end
+    -- Clear whatever overlaps first, or placeRect refuses the ground.
+    for r = rect.r1, rect.r2 do
+        for c = rect.c1, rect.c2 do self:clearCell(r, c) end
+    end
+    return self:placeRect(rect.r1, rect.c1, rect.r2, rect.c2) ~= false
+end
+
+function ShikakuBoard:getHintsUsed()
+    return self.hints_used or 0
+end
+
+function ShikakuBoard:noteHintUsed()
+    self.hints_used = (self.hints_used or 0) + 1
+end
+
 function ShikakuBoard:serialize()
     local n = self.n
     local rects_out = {}
