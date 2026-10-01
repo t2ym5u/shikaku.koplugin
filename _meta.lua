@@ -2,5 +2,5 @@ local _ = require("gettext")
 return {
     fullname    = _("Shikaku"),
     description = _("Divide the grid into rectangles"),
-    version     = "1.2.0",
+    version     = "1.2.1",
 }
