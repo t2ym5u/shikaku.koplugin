@@ -33,7 +33,7 @@ Divide the grid into rectangles. Each rectangle contains exactly one number equa
 | Draw a rectangle | Tap start cell, then end cell |
 | Remove a rectangle | Tap inside it |
 | Check progress | Tap **Check** |
-| New puzzle | Tap **New** |
+| New puzzle | Tap **New game** |
 | Show rules | Tap **Rules** |
 
 ## License

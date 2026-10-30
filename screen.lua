@@ -7,8 +7,6 @@ local function lrequire(name)
     return package.loaded[key]
 end
 
-local ButtonTable     = require("ui/widget/buttontable")
-local Device          = require("device")
 local FrameContainer  = require("ui/widget/container/framecontainer")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan  = require("ui/widget/horizontalspan")
@@ -23,8 +21,6 @@ local ScreenBase         = require("screen_base")
 local MenuHelper         = require("menu_helper")
 local ShikakuBoard       = lrequire("board")
 local ShikakuBoardWidget = lrequire("board_widget")
-
-local DeviceScreen = Device.screen
 
 local GRID_SIZES = { 6, 8, 10 }
 
@@ -97,29 +93,7 @@ end
 -- ---------------------------------------------------------------------------
 
 function ShikakuScreen:buildLayout()
-    local sw           = DeviceScreen:getWidth()
     local is_landscape = self:isLandscape()
-
-    self.board_widget = ShikakuBoardWidget:new{
-        board        = self.board,
-        onCellAction = function(r, c, is_hold)
-            self:onCellAction(r, c, is_hold)
-        end,
-    }
-
-    local board_frame = FrameContainer:new{
-        padding = Size.padding.large,
-        margin  = Size.margin.default,
-        self.board_widget,
-    }
-
-    local board_frame_size  = self.board_widget.size + (Size.padding.large + Size.margin.default) * 2
-    local right_panel_width = sw - board_frame_size - Size.span.horizontal_default
-    local button_width = is_landscape
-        and math.max(right_panel_width - Size.span.horizontal_default, 100)
-        or  math.floor(sw * 0.9)
-
-    self.status_text:setMaxWidth(is_landscape and button_width or board_frame_size)
 
     local title_bar = self:buildTitleBar(_("Shikaku"), function()
         return {
@@ -130,42 +104,53 @@ function ShikakuScreen:buildLayout()
         }
     end)
 
-    local bottom_buttons = ButtonTable:new{
-        shrink_unneeded_width = true,
-        width   = button_width,
-        buttons = {{
-            { text = _("Check"),     callback = function() self:onCheck() end },
-            { text = _("Hint"), callback = function() self:onHint() end },
-            { text = _("Clear All"), callback = function() self:onClearAll() end },
-            { id = "undo_button", text = _("Undo"),
-              callback = function() self:onUndo() end },
-        }},
+    -- Controls first: the board is sized from whatever room they leave.
+    self.status_text:setMaxWidth(self:getControlsWidth())
+    local action_bar = self:buildActionBar({
+        { text = _("Check"),     callback = function() self:onCheck() end },
+        { text = _("Hint"), callback = function() self:onHint() end },
+        { text = _("Clear All"), callback = function() self:onClearAll() end },
+        { id = "undo_button", text = _("Undo"),
+          callback = function() self:onUndo() end },
+    })
+    self.undo_button = action_bar:getButtonById("undo_button")
+    local controls = VerticalGroup:new{
+        align = "center",
+        self.status_text,
+        VerticalSpan:new{ width = Size.span.vertical_large },
+        action_bar,
     }
-    self.undo_button = bottom_buttons:getButtonById("undo_button")
+
+    -- The widget draws its own thick outer border, so the frame only pads.
+    local frame_pad   = Size.padding.large
+    local frame_extra = 2 * frame_pad
+    local budget_w, budget_h = self:getBoardBudget(title_bar, controls)
+    self.board_widget = ShikakuBoardWidget:new{
+        board        = self.board,
+        max_size     = math.min(budget_w, budget_h) - frame_extra,
+        onCellAction = function(r, c, is_hold)
+            self:onCellAction(r, c, is_hold)
+        end,
+    }
+    local board_frame = FrameContainer:new{
+        padding    = frame_pad,
+        margin     = 0,
+        bordersize = 0,
+        self.board_widget,
+    }
     self:_updateUndoButton()
 
     if is_landscape then
-        local right_panel = VerticalGroup:new{
-            align = "center",
-            self.status_text,
-            VerticalSpan:new{ width = Size.span.vertical_large },
-            bottom_buttons,
-        }
         local content = HorizontalGroup:new{
             align = "center",
             board_frame,
-            HorizontalSpan:new{ width = Size.span.horizontal_default },
-            right_panel,
+            HorizontalSpan:new{ width = self:getGutter() },
+            controls,
         }
         self:buildLandscapeLayout(title_bar, content)
     else
-        local content = VerticalGroup:new{
-            align = "center",
-            board_frame,
-            VerticalSpan:new{ width = Size.span.vertical_large },
-            self.status_text,
-        }
-        self:buildPortraitLayout(title_bar, content, bottom_buttons)
+        self:buildPortraitLayout(title_bar, board_frame,
+            VerticalGroup:new{ align = "center", controls, VerticalSpan:new{ width = self:getGutter() } })
     end
     self:updateStatus()
 end
@@ -204,6 +189,7 @@ function ShikakuScreen:onCellAction(r, c, is_hold)
     else
         self:updateStatus()
     end
+    self:refreshActionBar()
 end
 
 -- ---------------------------------------------------------------------------
@@ -226,10 +212,12 @@ function ShikakuScreen:onClearAll()
     self:_updateUndoButton()
     self.board_widget:refresh()
     self:updateStatus()
+    self:refreshActionBar()
 end
 
 function ShikakuScreen:onUndo()
-    local ok, msg = self.board:undo()
+    -- The board's `undo` field (its UndoStack) shadows the :undo() method.
+    local ok, msg = ShikakuBoard.undo(self.board)
     if ok then
         self.plugin:saveState(self.board:serialize())
         self:_updateUndoButton()
@@ -238,6 +226,17 @@ function ShikakuScreen:onUndo()
     else
         self:updateStatus(msg)
     end
+    self:refreshActionBar()
+end
+
+function ShikakuScreen:isRoundOver()
+    return self.board:checkWin()
+end
+
+-- A hint can place the last cell, so the round may end here.
+function ShikakuScreen:onHint()
+    ScreenBase.onHint(self)
+    self:refreshActionBar()
 end
 
 function ShikakuScreen:onCheck()
@@ -261,7 +260,7 @@ function ShikakuScreen:openGridMenu()
         sizes[#sizes + 1] = { id = sz, text = sz .. "\xC3\x97" .. sz }
     end
     MenuHelper.openSizeMenu{
-        title     = _("Select grid size"),
+        title     = _("Select size"),
         sizes     = sizes,
         current   = self.plugin:getSetting("grid_n", 6),
         parent    = self,
@@ -303,23 +302,20 @@ function ShikakuScreen:updateStatus(msg)
         local total  = self.board.total_rects
         local diff   = self.plugin:getSetting("difficulty", "medium")
         local label  = MenuHelper.DIFFICULTY_LABELS[diff] or diff
-        local corner = self.board.selected_corner
-            and _(" \xC2\xB7 Tap second corner")
-            or  _(" \xC2\xB7 Tap two corners to place")
-        status = T(_("%1\xC3\x97%2 \xC2\xB7 %3 \xC2\xB7 Rects: %4/%5%6"),
-            self.board.n, self.board.n, label, placed, total, corner)
+        status = self:joinStatus(
+            T("%1×%1", self.board.n), label, T(_("Rectangles: %1/%2"), placed, total))
     end
     ScreenBase.updateStatus(self, status)
 end
 
 function ShikakuScreen:getGridButtonText()
-    return T(_("Grid: %1"), self.board.n .. "\xC3\x97" .. self.board.n)
+    return T(_("Size: %1"), self.board.n .. "\xC3\x97" .. self.board.n)
 end
 
 function ShikakuScreen:getDiffButtonText()
     local diff  = self.plugin:getSetting("difficulty", "medium")
     local label = MenuHelper.DIFFICULTY_LABELS[diff] or diff
-    return T(_("Diff: %1"), label)
+    return T(_("Difficulty: %1"), label)
 end
 
 function ShikakuScreen:_updateUndoButton()

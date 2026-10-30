@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-10-30
+
+### Changed
+- Redesigned play screen: the board is larger, filling the room the controls
+  leave, with a full-width action bar under the status line and a single
+  frame around the board.
+- The status line reads "8×8 · Medium · Rectangles: 3/12" and wraps in
+  landscape instead of being cut off. The "Tap two corners" reminder it used
+  to carry is in the rules.
+- The title-bar menu shows "Size: …" and "Difficulty: …" (was "Grid: …" and
+  "Diff: …"), like every other game.
+- Once the puzzle is solved, the action bar shows "New game" in place of
+  Check/Hint/Clear All/Undo, so the next round no longer needs the menu.
+
+### Fixed
+- Tapping Undo crashed ("attempt to call method 'undo'").
+- Clue numbers overflowed their cells: the font was sized for one digit,
+  but areas reach two. It is now fitted to the widest clue on the board.
+- Using a hint wiped the saved game; it is now kept. When a hint completes
+  the puzzle, the status shows the win message.
+
 ## [1.2.2] - 2026-10-07
 
 ### Fixed
