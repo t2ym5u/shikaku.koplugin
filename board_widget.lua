@@ -30,6 +30,17 @@ function ShikakuBoardWidget:init()
     local n   = self.board and self.board.n or 6
     self.cols = n
     self.rows = n
+    -- Clues are areas and can reach two digits: size the font for the
+    -- widest one on this board, not for a single digit.
+    local max_clue = 9
+    if self.board then
+        for r = 1, n do
+            for c = 1, n do
+                max_clue = math.max(max_clue, self.board.clues[r][c] or 0)
+            end
+        end
+    end
+    self.max_value = max_clue
     GridWidgetBase.init(self)
 end
 
