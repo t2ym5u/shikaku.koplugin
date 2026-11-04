@@ -19,6 +19,7 @@ local T               = require("ffi/util").template
 
 local ScreenBase         = require("screen_base")
 local MenuHelper         = require("menu_helper")
+local GenProgress        = require("gen_progress")
 local ShikakuBoard       = lrequire("board")
 local ShikakuBoardWidget = lrequire("board_widget")
 
@@ -79,7 +80,8 @@ function ShikakuScreen:init()
     local n     = self.plugin:getSetting("grid_n", 6)
     self.board  = ShikakuBoard:new{ n = n }
     if not self.board:load(state) then
-        self.board:generate(self.plugin:getSetting("difficulty", "medium"))
+        local diff = self.plugin:getSetting("difficulty", "medium")
+        GenProgress.run(function(on_progress) self.board:generate(diff, on_progress) end)
     end
     ScreenBase.init(self)
 end
@@ -201,7 +203,7 @@ function ShikakuScreen:onNewGame()
     local diff = self.plugin:getSetting("difficulty", "medium")
     local n    = self.plugin:getSetting("grid_n", 6)
     self.board = ShikakuBoard:new{ n = n }
-    self.board:generate(diff)
+    GenProgress.run(function(on_progress) self.board:generate(diff, on_progress) end)
     self.plugin:saveState(self.board:serialize())
     self:buildLayout()
     UIManager:setDirty(self, function() return "ui", self.dimen end)

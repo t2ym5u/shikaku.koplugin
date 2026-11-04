@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-11-04
+
+### Changed
+- Faster puzzle generation: a 10×10 grid took up to 0.66 s on a desktop
+  (about 15 s on an e-reader); it now takes at most a few hundredths of a
+  second (about a second on a Kobo). The uniqueness check now also spots
+  a cell no rectangle can cover anymore, and fills the most constrained
+  cell or clue first. Same puzzles as before for the same seed.
+- A "Generating puzzle…" bar appears if generation still takes a moment
+  (needs game-common 1.12.0).
+
 ## [1.4.3] - 2026-11-03
 
 ### Changed

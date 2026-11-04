@@ -221,4 +221,47 @@ describe("ShikakuBoard", function()
             assert.is_false(b:load({}))
         end)
     end)
+    describe("uniqueness check (1.5.0)", function()
+        it("counts the tilings of small grids", function()
+            -- 2x2 with a single 4: one rectangle, the whole grid
+            assert.are.equal(1, (Board.countSolutions({ { 4, 0 }, { 0, 0 } }, 2, 100, 1e6)))
+            -- 2x2 with two 2s on a diagonal: two dominoes either way
+            assert.are.equal(2, (Board.countSolutions({ { 2, 0 }, { 0, 2 } }, 2, 100, 1e6)))
+            -- areas that don't add up to the grid: no tiling
+            assert.are.equal(0, (Board.countSolutions({ { 2, 0 }, { 0, 0 } }, 2, 100, 1e6)))
+        end)
+
+        it("every generated puzzle is unique, and generation is fast", function()
+            for _, n in ipairs({ 6, 8, 10 }) do
+                for _, diff in ipairs({ "easy", "medium", "hard" }) do
+                    local worst = 0
+                    for seed = 1, 8 do
+                        math.randomseed(seed * 7919 + n)
+                        local t0 = os.clock()
+                        local b = Board:new{ n = n }
+                        b:generate(diff)
+                        worst = math.max(worst, os.clock() - t0)
+                        local solutions, exhausted = Board.countSolutions(b.clues, n, 2, 1e6)
+                        assert.is_false(exhausted)
+                        assert.are.equal(1, solutions,
+                            ("n=%d diff=%s seed=%d: not unique"):format(n, diff, seed))
+                    end
+                    -- ~40 ms worst on a desktop (0.66 s before 1.5.0);
+                    -- generous for slow CI.
+                    assert.is_true(worst < 1.5, ("n=%d diff=%s took %.2fs"):format(n, diff, worst))
+                end
+            end
+        end)
+
+        it("reports progress while generating", function()
+            local calls, last = 0, 0
+            math.randomseed(3)
+            Board:new{ n = 10 }:generate("hard", function(f)
+                calls = calls + 1
+                assert.is_true(f >= last and f <= 1)
+                last = f
+            end)
+            assert.is_true(calls > 0)
+        end)
+    end)
 end)
