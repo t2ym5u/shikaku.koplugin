@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-11-04
+
+### Fixed
+- Easy, Medium and Hard now really differ. Every level's rectangles were
+  capped at 8 cells, so at 8×8 and 10×10 (and Medium vs Hard at 6×6) the
+  three levels gave the very same puzzle. Now:
+  - **Easy**: small rectangles (up to the grid's width), and every step is
+    "this number has only one place left" or "only one rectangle can
+    still reach this cell".
+  - **Medium**: bigger rectangles, fewer numbers (about 10 instead of 16
+    at 10×10), and one to three steps that need a closer look: a cell
+    that every possible rectangle of a number covers is that number's, or
+    a cell only one number can still reach.
+  - **Hard**: the biggest rectangles (up to twice the grid's width), the
+    fewest numbers (about 8 at 10×10), and at least four such steps
+    (three at 6×6), often many more.
+- No puzzle needs trial and error any more: before, about one 10×10
+  puzzle in eight could only be finished by trying a rectangle and seeing
+  whether it led to a dead end. Every puzzle still has exactly one
+  solution.
+- Puzzles therefore differ from 1.5.x for the same seed (Daily Challenge
+  included). Generation stays fast (at most a few hundredths of a second
+  on a desktop).
+
 ## [1.5.0] - 2026-11-04
 
 ### Changed
