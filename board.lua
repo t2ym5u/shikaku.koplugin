@@ -15,7 +15,12 @@ local DEFAULT_DIFFICULTY = "medium"
 
 -- Split a rectangle region recursively until all pieces have area <= max_area.
 -- regions: list of {r1,c1,r2,c2}
-local function splitRect(r1, c1, r2, c2, max_area, regions)
+-- 1.6.0: a cut is only made where both halves keep at least min_area cells
+-- (a piece with no such cut is kept as it is, even above max_area), so a
+-- level's rectangles stay in its size range instead of including slivers
+-- of 1-2 cells at every level.
+local function splitRect(r1, c1, r2, c2, max_area, regions, min_area)
+    min_area = min_area or 1
     local area = (r2 - r1 + 1) * (c2 - c1 + 1)
     if area <= max_area then
         regions[#regions + 1] = { r1 = r1, c1 = c1, r2 = r2, c2 = c2 }
@@ -23,26 +28,31 @@ local function splitRect(r1, c1, r2, c2, max_area, regions)
     end
     local h = r2 - r1 + 1
     local w = c2 - c1 + 1
-    -- Choose split axis: prefer to split along the longer axis
-    if h >= w then
-        -- Horizontal split: split along rows
-        if h < 2 then
-            regions[#regions + 1] = { r1 = r1, c1 = c1, r2 = r2, c2 = c2 }
-            return
-        end
-        local split = r1 + math.random(1, h - 1)
-        splitRect(r1, c1, split - 1, c2, max_area, regions)
-        splitRect(split, c1, r2, c2, max_area, regions)
-    else
-        -- Vertical split: split along columns
-        if w < 2 then
-            regions[#regions + 1] = { r1 = r1, c1 = c1, r2 = r2, c2 = c2 }
-            return
-        end
-        local split = c1 + math.random(1, w - 1)
-        splitRect(r1, c1, r2, split - 1, max_area, regions)
-        splitRect(r1, split, r2, c2, max_area, regions)
+    -- Split along the longer axis (rows when square), where both halves
+    -- keep min_area cells; else across the other axis; else keep it whole.
+    local function cuts(len, other)
+        local lo = math.max(1, math.ceil(min_area / other))
+        local hi = len - lo
+        return lo, hi
     end
+    local axes = h >= w and { "h", "w" } or { "w", "h" }
+    for _, axis in ipairs(axes) do
+        local len, other = h, w
+        if axis == "w" then len, other = w, h end
+        local lo, hi = cuts(len, other)
+        if lo <= hi then
+            local k = math.random(lo, hi)
+            if axis == "h" then
+                splitRect(r1, c1, r1 + k - 1, c2, max_area, regions, min_area)
+                splitRect(r1 + k, c1, r2, c2, max_area, regions, min_area)
+            else
+                splitRect(r1, c1, r2, c1 + k - 1, max_area, regions, min_area)
+                splitRect(r1, c1 + k, r2, c2, max_area, regions, min_area)
+            end
+            return
+        end
+    end
+    regions[#regions + 1] = { r1 = r1, c1 = c1, r2 = r2, c2 = c2 }
 end
 
 -- ---------------------------------------------------------------------------
@@ -205,6 +215,167 @@ local function countSolutions(clues, n, limit, node_budget)
 end
 
 -- ---------------------------------------------------------------------------
+-- Human-style solver (1.6.0): grades a clue grid by the reasoning a player
+-- needs, never by trial ("suppose this rectangle, find a contradiction",
+-- which on paper is indistinguishable from guessing).
+--
+--   tier 1  a clue with only one rectangle left that fits, or a cell only
+--           one rectangle (of any clue) can still cover: draw it, and
+--           strike every other rectangle overlapping it.
+--   tier 2  a cell that every remaining rectangle of a clue covers belongs
+--           to that clue: strike the other clues' rectangles over it; a
+--           cell only one clue's rectangles can still reach must be that
+--           clue's: strike its rectangles that miss it.
+--
+-- Every deduction is sound, so a grid this solves completely has exactly
+-- one solution. Returns solved, tier2 (how many tier-2 deductions were
+-- needed because tier 1 was stuck), tier1_rects (rectangles drawn by a
+-- tier-1 move).
+-- ---------------------------------------------------------------------------
+local function logicSolve(clues, n, max_tier)
+    max_tier = max_tier or 2
+    local clue_list = {}
+    for r = 1, n do
+        for c = 1, n do
+            if clues[r][c] and clues[r][c] > 0 then
+                clue_list[#clue_list + 1] = { r = r, c = c, area = clues[r][c] }
+            end
+        end
+    end
+    local K, N = #clue_list, n * n
+    local rcells, rclue, alive = {}, {}, {}
+    local cands, cover = {}, {}
+    for cell = 1, N do cover[cell] = {} end
+    local total = 0
+    for i, cl in ipairs(clue_list) do
+        total = total + cl.area
+        local list = {}
+        for _, rect in ipairs(candidateRectsFor(clues, n, cl.r, cl.c, cl.area)) do
+            local id = #rcells + 1
+            local cells = {}
+            for r = rect.r1, rect.r2 do
+                for c = rect.c1, rect.c2 do
+                    local cell = (r - 1) * n + c
+                    cells[#cells + 1] = cell
+                    local cv = cover[cell]
+                    cv[#cv + 1] = id
+                end
+            end
+            rcells[id], rclue[id], alive[id] = cells, i, true
+            list[#list + 1] = id
+        end
+        cands[i] = list
+    end
+    if total ~= N then return false, 0, 0 end
+
+    local fixed, covered = {}, {}
+    local left = K
+
+    local function fix(id)
+        local i = rclue[id]
+        fixed[i] = id
+        left = left - 1
+        for _, other in ipairs(cands[i]) do
+            if other ~= id then alive[other] = false end
+        end
+        for _, cell in ipairs(rcells[id]) do
+            covered[cell] = true
+            for _, other in ipairs(cover[cell]) do
+                if other ~= id then alive[other] = false end
+            end
+        end
+    end
+
+    local t2_rounds, t1_rects = 0, 0
+    while left > 0 do
+        local progress = false
+        -- tier 1: clue singles
+        for i = 1, K do
+            if not fixed[i] then
+                local only, cnt = nil, 0
+                for _, id in ipairs(cands[i]) do
+                    if alive[id] then cnt = cnt + 1; only = id end
+                end
+                if cnt == 0 then return false, t2_rounds, t1_rects end
+                if cnt == 1 then fix(only); t1_rects = t1_rects + 1; progress = true end
+            end
+        end
+        -- tier 1: cell singles
+        if not progress then
+            for cell = 1, N do
+                if not covered[cell] then
+                    local only, cnt = nil, 0
+                    for _, id in ipairs(cover[cell]) do
+                        if alive[id] then cnt = cnt + 1; only = id end
+                    end
+                    if cnt == 0 then return false, t2_rounds, t1_rects end
+                    if cnt == 1 then
+                        fix(only); t1_rects = t1_rects + 1; progress = true
+                        break
+                    end
+                end
+            end
+        end
+        -- Tier 2 makes one deduction (one clue's shared cells, or one
+        -- cell's single owner) and goes back to tier 1, so tier2 counts
+        -- the steps a player could not take with tier 1 alone.
+        if not progress and max_tier >= 2 then
+            -- tier 2a: cells common to all of a clue's rectangles
+            for i = 1, K do
+                if not fixed[i] then
+                    local hits, nalive = {}, 0
+                    for _, id in ipairs(cands[i]) do
+                        if alive[id] then
+                            nalive = nalive + 1
+                            for _, cell in ipairs(rcells[id]) do
+                                hits[cell] = (hits[cell] or 0) + 1
+                            end
+                        end
+                    end
+                    for cell = 1, N do
+                        if hits[cell] == nalive then
+                            for _, other in ipairs(cover[cell]) do
+                                if alive[other] and rclue[other] ~= i then
+                                    alive[other] = false; progress = true
+                                end
+                            end
+                        end
+                    end
+                    if progress then break end
+                end
+            end
+            -- tier 2b: a cell only one clue can reach
+            for cell = 1, N do
+                if progress then break end
+                if not covered[cell] then
+                    local owner, single = nil, true
+                    for _, id in ipairs(cover[cell]) do
+                        if alive[id] then
+                            if owner == nil then owner = rclue[id]
+                            elseif owner ~= rclue[id] then single = false; break end
+                        end
+                    end
+                    if owner and single then
+                        for _, id in ipairs(cands[owner]) do
+                            if alive[id] then
+                                local hit = false
+                                for _, c2 in ipairs(rcells[id]) do
+                                    if c2 == cell then hit = true; break end
+                                end
+                                if not hit then alive[id] = false; progress = true end
+                            end
+                        end
+                    end
+                end
+            end
+            if progress then t2_rounds = t2_rounds + 1 end
+        end
+        if not progress then return false, t2_rounds, t1_rects end
+    end
+    return true, t2_rounds, t1_rects
+end
+
+-- ---------------------------------------------------------------------------
 -- ShikakuBoard
 -- ---------------------------------------------------------------------------
 
@@ -229,47 +400,64 @@ function ShikakuBoard:new(opts)
     return obj
 end
 
--- on_progress(fraction), optional: called after every uniqueness check
+-- What each level asks for (1.6.0). Before, every level's rectangles were
+-- capped at 8 cells, so at 8x8 and 10x10 (and Medium/Hard at 6x6) all
+-- three levels built the very same puzzles.
+--   max_area / min_area  rectangle sizes (see splitRect)
+--   min_t2 / max_t2      how many tier-2 deductions (see logicSolve) the
+--                        solution needs; tier 1 alone when both are 0
+-- Easy: small rectangles, "only one place fits" all the way.
+-- Medium: mid-size rectangles, a few tier-2 steps.
+-- Hard: big rectangles (fewer numbers), more tier-2 steps.
+-- Never trial and error, at any level.
+local LEVELS = {
+    easy   = function(n) return { max_area = n, min_area = 2, min_t2 = 0, max_t2 = 0 } end,
+    medium = function(n) return { max_area = math.floor(n * 1.6), min_area = 3,
+                                  min_t2 = 1, max_t2 = n >= 8 and 3 or 2 } end,
+    hard   = function(n) return { max_area = 2 * n, min_area = 4,
+                                  min_t2 = n >= 8 and 4 or 3, max_t2 = math.huge } end,
+}
+ShikakuBoard.LEVELS = LEVELS
+ShikakuBoard.PARTITIONS, ShikakuBoard.CLUE_TRIES = 200, 5
+
+-- on_progress(fraction), optional: called after every candidate grid
 -- (screen.lua wires it to the shared "Generating puzzle…" bar).
 function ShikakuBoard:generate(difficulty, on_progress)
-    self.difficulty     = difficulty or self.difficulty
-    local checks = 0
+    self.difficulty = difficulty or self.difficulty
     self.undo:clear()
-    local n       = self.n
-    -- max area per rectangle: fewer rects = harder
-    local max_area
-    if self.difficulty == "easy" then
-        max_area = math.max(2, math.floor(n * n / 6))
-    elseif self.difficulty == "hard" then
-        max_area = math.min(n * n, math.floor(n * n / 2))
-    else
-        max_area = math.max(2, math.floor(n * n / 4))
-    end
-    max_area = math.min(max_area, 8)
+    local n = self.n
+    local level = (LEVELS[self.difficulty] or LEVELS.medium)(n)
 
     -- The clue grid (one area number per rectangle, at a chosen cell
-    -- within it) IS the entire puzzle -- there's no "given" mask to dig,
-    -- so like hitori/nurikabe this generates+verifies whole candidates
-    -- instead. Repicking which cell holds each rectangle's clue is much
-    -- cheaper than re-splitting the grid (no search involved, and a
-    -- different clue-cell choice can turn an ambiguous layout unique), so
-    -- that's tried many times per partition before falling back to a
-    -- fresh split. Measured pre-fix: 0/15 unique at n=8 and n=10 (every
-    -- difficulty) -- naive single-random-clue-cell placement is severely
-    -- ambiguous for this genre, as expected.
-    -- Search nodes per check (running out counts as "not unique"): the
-    -- exact-cover search settles every candidate here in under 150 nodes
-    -- (measured on 1,500 10x10 checks), so this is only a safety cap.
-    local node_budget = 5000
-    local best_regions, best_solution_rect, best_clues
+    -- within it) IS the entire puzzle, so whole candidates are generated
+    -- and graded: a random partition, then several random choices of
+    -- which cell carries each rectangle's number (cheap, and that choice
+    -- is what makes a layout ambiguous or not), then a fresh partition.
+    -- A candidate is kept when the human-style solver finishes it (so it
+    -- has exactly one solution) with a tier-2 count in the level's range.
+    -- All work is bounded by attempt counts (same seed, same puzzle on
+    -- every device).
+    local PARTITIONS, CLUE_TRIES = ShikakuBoard.PARTITIONS, ShikakuBoard.CLUE_TRIES
+    local total = PARTITIONS * CLUE_TRIES
+    local checks = 0
+    -- Fallback if the budget runs out (rare, see the specs): the solvable
+    -- candidate whose tier-2 count came closest to the range; the very
+    -- first candidate only if none was solvable without trial.
+    local fb, fb_dist, first
 
-    for partition_attempt = 1, 40 do
+    local function accept(regions, solution_rect, clues)
+        self.rects           = regions
+        self.solution_rect   = solution_rect
+        self.clues           = clues
+        self.total_rects     = #regions
+        self.rect_marks      = emptyGrid(n)
+        self.player_rects    = {}
+        self.selected_corner = nil
+    end
+
+    for _ = 1, PARTITIONS do
         local regions = {}
-        for a = 1, 20 do
-            regions = {}
-            splitRect(1, 1, n, n, max_area, regions)
-            if #regions >= 2 then break end
-        end
+        splitRect(1, 1, n, n, level.max_area, regions, level.min_area)
 
         local solution_rect = emptyGrid(n)
         local rect_cells = {}
@@ -284,7 +472,7 @@ function ShikakuBoard:generate(difficulty, on_progress)
             rect_cells[idx] = cells
         end
 
-        for clue_attempt = 1, 25 do
+        for _ = 1, CLUE_TRIES do
             local clues = emptyGrid(n)
             for idx, rect in ipairs(regions) do
                 local area = (rect.r2 - rect.r1 + 1) * (rect.c2 - rect.c1 + 1)
@@ -292,34 +480,25 @@ function ShikakuBoard:generate(difficulty, on_progress)
                 local ci = math.random(#cells)
                 clues[cells[ci][1]][cells[ci][2]] = area
             end
+            if not first then first = { regions, solution_rect, clues } end
 
-            if not best_regions then
-                best_regions, best_solution_rect, best_clues = regions, solution_rect, clues
-            end
-
-            local solutions, exhausted = countSolutions(clues, n, 2, node_budget)
             checks = checks + 1
-            if on_progress then on_progress(checks / (checks + 40)) end
-            if solutions == 1 and not exhausted then
-                self.rects          = regions
-                self.solution_rect  = solution_rect
-                self.clues          = clues
-                self.total_rects    = #regions
-                self.rect_marks     = emptyGrid(n)
-                self.player_rects   = {}
-                self.selected_corner = nil
-                return
+            if on_progress then on_progress(checks / total) end
+            local solved, t2 = logicSolve(clues, n)
+            if solved then
+                if t2 >= level.min_t2 and t2 <= level.max_t2 then
+                    accept(regions, solution_rect, clues)
+                    return
+                end
+                local dist = t2 < level.min_t2 and level.min_t2 - t2 or t2 - level.max_t2
+                if not fb or dist < fb_dist then
+                    fb, fb_dist = { regions, solution_rect, clues }, dist
+                end
             end
         end
     end
-
-    self.rects          = best_regions
-    self.solution_rect   = best_solution_rect
-    self.clues           = best_clues
-    self.total_rects     = #best_regions
-    self.rect_marks       = emptyGrid(n)
-    self.player_rects     = {}
-    self.selected_corner  = nil
+    local pick = fb or first
+    accept(pick[1], pick[2], pick[3])
 end
 
 -- ---------------------------------------------------------------------------
@@ -620,5 +799,7 @@ end
 
 -- exposed for the specs
 ShikakuBoard.countSolutions = countSolutions
+ShikakuBoard.logicSolve     = logicSolve
+ShikakuBoard.splitRect      = splitRect
 
 return ShikakuBoard
